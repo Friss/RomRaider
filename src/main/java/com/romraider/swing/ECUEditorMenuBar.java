@@ -682,7 +682,7 @@ public class ECUEditorMenuBar extends JMenuBar implements ActionListener {
 	 */
 	private void initTuneRepository() throws Exception {
 		final ECUEditor parent = ECUEditorManager.getECUEditor();
-		final Rom rom = parent.getLastSelectedRom();
+		final Rom rom = versioningRom();
 		if (rom == null) {
 			return;
 		}
@@ -725,7 +725,7 @@ public class ECUEditorMenuBar extends JMenuBar implements ActionListener {
 	/** Snapshot the current tune and create a new commit with a user message. */
 	private void commitTune() throws Exception {
 		final ECUEditor parent = ECUEditorManager.getECUEditor();
-		final Rom rom = parent.getLastSelectedRom();
+		final Rom rom = versioningRom();
 		if (rom == null) {
 			return;
 		}
@@ -756,7 +756,7 @@ public class ECUEditorMenuBar extends JMenuBar implements ActionListener {
 	/** Open the history dialog for the current tune's repository. */
 	private void showTuneHistory() throws Exception {
 		final ECUEditor parent = ECUEditorManager.getECUEditor();
-		final Rom rom = parent.getLastSelectedRom();
+		final Rom rom = versioningRom();
 		if (rom == null) {
 			return;
 		}
@@ -796,6 +796,26 @@ public class ECUEditorMenuBar extends JMenuBar implements ActionListener {
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * @return the selected ROM if it is eligible for version control (open and
+	 *         already saved to a file); otherwise shows guidance and returns
+	 *         {@code null}. The repo association is keyed by the tune's file
+	 *         path, so an unsaved tune cannot be versioned yet.
+	 */
+	private Rom versioningRom() {
+		final ECUEditor parent = ECUEditorManager.getECUEditor();
+		final Rom rom = parent.getLastSelectedRom();
+		if (rom == null) {
+			return null;
+		}
+		if (rom.getFullFileName() == null) {
+			showMessageDialog(parent, rb.getString("VCSAVEFIRST"),
+					rb.getString("VERSIONCTRL"), INFORMATION_MESSAGE);
+			return null;
+		}
+		return rom;
 	}
 
 	private static String authorFor(Rom rom) {

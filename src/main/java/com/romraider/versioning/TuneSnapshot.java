@@ -97,26 +97,29 @@ public final class TuneSnapshot {
     private static void writeManifest(Rom rom, File repoDir) throws IOException {
         final RomID id = rom.getRomID();
         final StringBuilder sb = new StringBuilder();
-        appendField(sb, "xmlid", id.getXmlid());
-        appendField(sb, "internalIdString", id.getInternalIdString());
-        appendField(sb, "ecuId", id.getEcuId());
-        appendField(sb, "caseId", id.getCaseId());
-        appendField(sb, "make", id.getMake());
-        appendField(sb, "market", id.getMarket());
-        appendField(sb, "model", id.getModel());
-        appendField(sb, "subModel", id.getSubModel());
-        appendField(sb, "transmission", id.getTransmission());
-        appendField(sb, "year", id.getYear());
-        appendField(sb, "author", id.getAuthor());
-        appendField(sb, "version", id.getVersion());
-        appendField(sb, "editStamp", id.getEditStamp());
-        appendField(sb, "checksum", id.getChecksum());
-        appendField(sb, "fileSize", Integer.toString(id.getFileSize()));
+        if (id != null) {
+            appendField(sb, "xmlid", id.getXmlid());
+            appendField(sb, "internalIdString", id.getInternalIdString());
+            appendField(sb, "ecuId", id.getEcuId());
+            appendField(sb, "caseId", id.getCaseId());
+            appendField(sb, "make", id.getMake());
+            appendField(sb, "market", id.getMarket());
+            appendField(sb, "model", id.getModel());
+            appendField(sb, "subModel", id.getSubModel());
+            appendField(sb, "transmission", id.getTransmission());
+            appendField(sb, "year", id.getYear());
+            appendField(sb, "author", id.getAuthor());
+            appendField(sb, "version", id.getVersion());
+            appendField(sb, "editStamp", id.getEditStamp());
+            appendField(sb, "checksum", id.getChecksum());
+            appendField(sb, "fileSize", Integer.toString(id.getFileSize()));
+        }
 
         final File manifest = new File(repoDir, MANIFEST_FILE);
         final BufferedWriter out = new BufferedWriter(new FileWriter(manifest));
         try {
             out.write(sb.toString());
+            out.flush();
         } finally {
             close(out);
         }
@@ -126,7 +129,7 @@ public final class TuneSnapshot {
         final File tablesDir = new File(repoDir, TABLES_DIR);
         // Start clean so removed tables don't survive between commits.
         deleteRecursively(tablesDir);
-        if (!tablesDir.mkdirs()) {
+        if (!tablesDir.exists() && !tablesDir.mkdirs()) {
             throw new IOException("Unable to create tables directory: " + tablesDir);
         }
 
@@ -144,6 +147,7 @@ public final class TuneSnapshot {
             final BufferedWriter out = new BufferedWriter(new FileWriter(tableFile));
             try {
                 out.write(table.getTableAsString().toString());
+                out.flush();
             } finally {
                 close(out);
             }

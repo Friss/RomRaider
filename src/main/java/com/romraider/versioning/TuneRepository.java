@@ -29,6 +29,7 @@ import java.util.Date;
 import java.util.List;
 
 import org.apache.log4j.Logger;
+import org.eclipse.jgit.api.AddCommand;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.diff.DiffFormatter;
@@ -61,10 +62,16 @@ import com.romraider.maps.Rom;
 public final class TuneRepository {
 
     private static final Logger LOGGER = Logger.getLogger(TuneRepository.class);
+    private static final String GITATTRIBUTES_FILE = ".gitattributes";
     private static final String GITATTRIBUTES =
             "# Managed by RomRaider tune versioning\n" +
             "tune.bin binary\n" +
             "*.txt text\n";
+
+    /** The only paths this feature stages/commits in the repository. */
+    private static final String[] SNAPSHOT_PATHS = {
+            TuneSnapshot.BIN_FILE, TuneSnapshot.MANIFEST_FILE,
+            TuneSnapshot.TABLES_DIR, GITATTRIBUTES_FILE };
 
     private final Git git;
     private final File workTree;
@@ -115,9 +122,18 @@ public final class TuneRepository {
             throws IOException, GitAPIException {
         TuneSnapshot.write(rom, workTree);
 
-        // Stage everything (adds, modifications and deletions).
-        git.add().addFilepattern(".").call();
-        git.add().setUpdate(true).addFilepattern(".").call();
+        // Stage only the snapshot paths this feature owns, so that selecting an
+        // existing/shared directory as the repo never sweeps in unrelated files.
+        // Two passes: the first stages adds/modifications, the second (update)
+        // stages deletions of tracked files (e.g. a removed table .txt).
+        final AddCommand add = git.add();
+        final AddCommand addUpdate = git.add().setUpdate(true);
+        for (String path : SNAPSHOT_PATHS) {
+            add.addFilepattern(path);
+            addUpdate.addFilepattern(path);
+        }
+        add.call();
+        addUpdate.call();
 
         if (git.status().call().isClean()) {
             LOGGER.info("Nothing to commit for tune repository " + workTree);
@@ -227,7 +243,7 @@ public final class TuneRepository {
     }
 
     private static void writeGitAttributes(File dir) {
-        final File attrs = new File(dir, ".gitattributes");
+        final File attrs = new File(dir, GITATTRIBUTES_FILE);
         if (attrs.exists()) {
             return;
         }

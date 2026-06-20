@@ -67,7 +67,6 @@ public final class TuneHistoryDialog extends JDialog {
 
     private static final long serialVersionUID = 1L;
     private static final Logger LOGGER = Logger.getLogger(TuneHistoryDialog.class);
-    private static final SimpleDateFormat DATE_FMT = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 
     private final transient TuneRepository repo;
     private final transient Rom rom;
@@ -261,6 +260,9 @@ public final class TuneHistoryDialog extends JDialog {
 
         final Rom historical = unmarshaller.unmarshallXMLDefinition(
                 defPath, doc.getDocumentElement(), romNode, data, editor.getStatusPanel());
+        if (historical == null) {
+            return null;
+        }
         historical.setDocument(doc);
         historical.setDefinitionPath(defPath);
 
@@ -280,6 +282,8 @@ public final class TuneHistoryDialog extends JDialog {
     private final class CommitTableModel extends AbstractTableModel {
         private static final long serialVersionUID = 1L;
         private final String[] columns = {"Commit", "Date", "Author", "Message"};
+        // SimpleDateFormat is not thread-safe; keep one per model, used on the EDT.
+        private final SimpleDateFormat dateFmt = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 
         @Override
         public int getRowCount() {
@@ -303,7 +307,7 @@ public final class TuneHistoryDialog extends JDialog {
                 case 0:
                     return c.getShortId();
                 case 1:
-                    return c.getWhen() == null ? "" : DATE_FMT.format(c.getWhen());
+                    return c.getWhen() == null ? "" : dateFmt.format(c.getWhen());
                 case 2:
                     return c.getAuthor();
                 case 3:
