@@ -113,32 +113,36 @@ public final class TuneRepository {
     }
 
     /**
-     * Write a fresh snapshot of {@code rom} and commit everything.
+     * Snapshot {@code rom} and commit it, if anything actually changed.
+     *
+     * Change detection is done from the side-effect-free part of the snapshot
+     * (the readable table tree + manifest). Only when that shows a real edit do
+     * we write the binary, because {@link Rom#saveFile()} re-stamps the edit
+     * count/checksum into checksum-fix tunes on every call -- writing it
+     * unconditionally would defeat no-op detection and silently mutate the open
+     * tune.
      *
      * @return the resulting commit, or {@code null} if there was nothing to
-     *         commit (working tree unchanged).
+     *         commit (no edits since the last version).
      */
     public TuneCommit commit(Rom rom, String message, String author)
             throws IOException, GitAPIException {
-        TuneSnapshot.write(rom, workTree);
+        // Phase 1: write only the no-side-effect artifacts and stage them.
+        TuneSnapshot.writeReadable(rom, workTree);
+        stageSnapshotPaths();
 
-        // Stage only the snapshot paths this feature owns, so that selecting an
-        // existing/shared directory as the repo never sweeps in unrelated files.
-        // Two passes: the first stages adds/modifications, the second (update)
-        // stages deletions of tracked files (e.g. a removed table .txt).
-        final AddCommand add = git.add();
-        final AddCommand addUpdate = git.add().setUpdate(true);
-        for (String path : SNAPSHOT_PATHS) {
-            add.addFilepattern(path);
-            addUpdate.addFilepattern(path);
-        }
-        add.call();
-        addUpdate.call();
-
-        if (git.status().call().isClean()) {
+        // If the readable tree + manifest are unchanged from the last commit,
+        // there were no real edits. The binary is left untouched (so the open
+        // tune is not re-stamped) and no empty commit is created.
+        if (hasCommits() && git.status().call().isClean()) {
             LOGGER.info("Nothing to commit for tune repository " + workTree);
             return null;
         }
+
+        // Phase 2: a real change (or the initial import) -- write the canonical
+        // binary too and stage it, then commit the whole snapshot.
+        TuneSnapshot.writeBinary(rom, workTree);
+        stageSnapshotPaths();
 
         final PersonIdent ident = identFor(author);
         final RevCommit revCommit = git.commit()
@@ -149,6 +153,23 @@ public final class TuneRepository {
                 .call();
 
         return toTuneCommit(revCommit);
+    }
+
+    /**
+     * Stage only the snapshot paths this feature owns, so that selecting an
+     * existing/shared directory as the repo never sweeps in unrelated files.
+     * Two passes: the first stages adds/modifications, the second (update)
+     * stages deletions of tracked files (e.g. a removed table .txt).
+     */
+    private void stageSnapshotPaths() throws GitAPIException {
+        final AddCommand add = git.add();
+        final AddCommand addUpdate = git.add().setUpdate(true);
+        for (String path : SNAPSHOT_PATHS) {
+            add.addFilepattern(path);
+            addUpdate.addFilepattern(path);
+        }
+        add.call();
+        addUpdate.call();
     }
 
     /** @return commit history, newest first. */

@@ -62,14 +62,16 @@ public final class TuneSnapshot {
     }
 
     /**
-     * Write the full snapshot of {@code rom} into {@code repoDir}, replacing any
-     * previous snapshot content (so deleted tables do not linger).
+     * Write the side-effect-free part of the snapshot: the readable per-table
+     * text tree and the metadata manifest. Neither touches the tune's bytes, so
+     * this is safe to call purely to detect whether anything actually changed
+     * (see {@link TuneRepository#commit}).
      *
      * @param rom     the tune to serialize
      * @param repoDir the repository working directory (will be created)
      * @throws IOException on any write failure
      */
-    public static void write(Rom rom, File repoDir) throws IOException {
+    public static void writeReadable(Rom rom, File repoDir) throws IOException {
         if (rom == null) {
             throw new IllegalArgumentException("rom is null");
         }
@@ -77,12 +79,16 @@ public final class TuneSnapshot {
             throw new IOException("Unable to create repository directory: " + repoDir);
         }
 
-        writeBinary(rom, repoDir);
         writeManifest(rom, repoDir);
         writeTables(rom, repoDir);
     }
 
-    private static void writeBinary(Rom rom, File repoDir) throws IOException {
+    /**
+     * Write the canonical binary. This calls {@link Rom#saveFile()}, which for
+     * checksum-fix tunes re-stamps the edit count/checksum in the tune's bytes,
+     * so it must only be called when a commit is actually going to happen.
+     */
+    public static void writeBinary(Rom rom, File repoDir) throws IOException {
         // saveFile() applies checksum fix-ups and returns the authoritative bytes.
         final byte[] output = rom.saveFile();
         final File binFile = new File(repoDir, BIN_FILE);
