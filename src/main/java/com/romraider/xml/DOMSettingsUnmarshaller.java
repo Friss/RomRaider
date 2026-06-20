@@ -116,6 +116,12 @@ public final class DOMSettingsUnmarshaller {
             } else if (n.getNodeType() == ELEMENT_NODE && n.getNodeName().equalsIgnoreCase(Settings.REPOSITORY_ELEMENT_NAME)) {
                 settings.setLastRepositoryDir(new File(unmarshallAttribute(n, Settings.REPOSITORY_ATTRIBUTE_NAME, "repositories")));
 
+            } else if (n.getNodeType() == ELEMENT_NODE && n.getNodeName().equalsIgnoreCase(Settings.TUNE_REPO_ELEMENT_NAME)) {
+                final String tune = unmarshallAttribute(n, Settings.TUNE_REPO_TUNE_ATTRIBUTE_NAME, "");
+                final String repo = unmarshallAttribute(n, Settings.TUNE_REPO_DIR_ATTRIBUTE_NAME, "");
+                if (tune.length() > 0 && repo.length() > 0) {
+                    settings.setTuneRepository(new File(tune), new File(repo));
+                }
             }
         }
         return settings;

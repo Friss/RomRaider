@@ -60,6 +60,8 @@ import com.romraider.net.BrowserControl;
 import com.romraider.ramtune.test.RamTuneTestApp;
 import com.romraider.util.ResourceUtil;
 import com.romraider.util.SettingsManager;
+import com.romraider.versioning.TuneHistoryDialog;
+import com.romraider.versioning.TuneRepository;
 
 public class ECUEditorMenuBar extends JMenuBar implements ActionListener {
 
@@ -105,6 +107,11 @@ public class ECUEditorMenuBar extends JMenuBar implements ActionListener {
 	private final JMenu toolMenu = new JMenu(rb.getString("TOOLS"));
 	private final JMenuItem launchRamTuneTestApp = new JMenuItem(rb.getString("TESTAPP"));
 	private final JMenuItem launchDataflowViews = new JMenu(rb.getString("DATAFLOW"));
+
+	private final JMenu versionMenu = new JMenu(rb.getString("VERSIONCTRL"));
+	private final JMenuItem initRepo = new JMenuItem(rb.getString("VCINIT"));
+	private final JMenuItem commitTune = new JMenuItem(rb.getString("VCCOMMIT"));
+	private final JMenuItem tuneHistory = new JMenuItem(rb.getString("VCHISTORY"));
 
 	private final JMenu helpMenu = new JMenu(rb.getString("HELP"));
 	private final JMenuItem about = new JMenuItem(MessageFormat.format(rb.getString("ABOUT"), PRODUCT_NAME));
@@ -265,6 +272,22 @@ public class ECUEditorMenuBar extends JMenuBar implements ActionListener {
 
 		toolMenu.add(launchDataflowViews);
 
+		// version control menu items
+		add(versionMenu);
+		versionMenu.setMnemonic('V');
+
+		versionMenu.add(initRepo);
+		initRepo.addActionListener(this);
+		initRepo.setMnemonic('I');
+
+		versionMenu.add(commitTune);
+		commitTune.addActionListener(this);
+		commitTune.setMnemonic('C');
+
+		versionMenu.add(tuneHistory);
+		tuneHistory.addActionListener(this);
+		tuneHistory.setMnemonic('H');
+
 		// help menu items
 		add(helpMenu);
 		helpMenu.setMnemonic('H');
@@ -294,6 +317,9 @@ public class ECUEditorMenuBar extends JMenuBar implements ActionListener {
 			exportDef.setText(rb.getString("EXPORTDEFF"));
 			compareImages.setEnabled(false);
 			convertRom.setEnabled(false);
+			initRepo.setEnabled(false);
+			commitTune.setEnabled(false);
+			tuneHistory.setEnabled(false);
 		} else {
 			saveImage.setEnabled(true);
 			quickSaveImage.setEnabled(true);
@@ -308,6 +334,9 @@ public class ECUEditorMenuBar extends JMenuBar implements ActionListener {
 			exportDef.setText(MessageFormat.format(rb.getString("EXPORTDEF"), file));
 			compareImages.setEnabled(true);
 			convertRom.setEnabled(true);
+			initRepo.setEnabled(true);
+			commitTune.setEnabled(true);
+			tuneHistory.setEnabled(true);
 		}
 		refreshImage.setText(MessageFormat.format(rb.getString("REFRESHF"), file));
 		closeImage.setText(MessageFormat.format(rb.getString("CLOSEF"), file));
@@ -361,6 +390,27 @@ public class ECUEditorMenuBar extends JMenuBar implements ActionListener {
 		} else if (e.getSource() == saveAsRepository) {
 			try {
 				this.saveAsRepository();
+			} catch (Exception ex) {
+				showMessageDialog(parent, new DebugPanel(ex, getSettings().getSupportURL()), rb.getString("EXCEPTN"),
+						ERROR_MESSAGE);
+			}
+		} else if (e.getSource() == initRepo) {
+			try {
+				this.initTuneRepository();
+			} catch (Exception ex) {
+				showMessageDialog(parent, new DebugPanel(ex, getSettings().getSupportURL()), rb.getString("EXCEPTN"),
+						ERROR_MESSAGE);
+			}
+		} else if (e.getSource() == commitTune) {
+			try {
+				this.commitTune();
+			} catch (Exception ex) {
+				showMessageDialog(parent, new DebugPanel(ex, getSettings().getSupportURL()), rb.getString("EXCEPTN"),
+						ERROR_MESSAGE);
+			}
+		} else if (e.getSource() == tuneHistory) {
+			try {
+				this.showTuneHistory();
 			} catch (Exception ex) {
 				showMessageDialog(parent, new DebugPanel(ex, getSettings().getSupportURL()), rb.getString("EXCEPTN"),
 						ERROR_MESSAGE);
@@ -619,6 +669,139 @@ public class ECUEditorMenuBar extends JMenuBar implements ActionListener {
 			}
 			getSettings().setLastRepositoryDir(selectedDir);
 		}
+	}
+
+	// ------------------------------------------------------------------
+	//  Tune version control (git-backed)
+	// ------------------------------------------------------------------
+
+	/**
+	 * Initialize a git repository for the currently selected tune, take the
+	 * first snapshot and commit it. The chosen directory is remembered per-tune
+	 * so subsequent commits and history use it automatically.
+	 */
+	private void initTuneRepository() throws Exception {
+		final ECUEditor parent = ECUEditorManager.getECUEditor();
+		final Rom rom = parent.getLastSelectedRom();
+		if (rom == null) {
+			return;
+		}
+
+		File repoDir = getSettings().getTuneRepository(rom.getFullFileName());
+		if (repoDir != null && TuneRepository.exists(repoDir)) {
+			showMessageDialog(parent,
+					MessageFormat.format(rb.getString("VCALREADY"), repoDir.getAbsolutePath()),
+					rb.getString("VERSIONCTRL"), INFORMATION_MESSAGE);
+			return;
+		}
+
+		final JFileChooser fc = new JFileChooser(getSettings().getLastRepositoryDir());
+		fc.setDialogTitle(rb.getString("VCSELECTDIR"));
+		fc.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+		fc.setAcceptAllFileFilterUsed(false);
+		fc.setSelectedFile(TuneHistoryDialog.defaultRepoDir(rom));
+		if (fc.showSaveDialog(parent) != JFileChooser.APPROVE_OPTION) {
+			return;
+		}
+		repoDir = fc.getSelectedFile();
+
+		final TuneRepository repo = TuneRepository.initOrOpen(repoDir);
+		try {
+			repo.commit(rom, rb.getString("VCINITMSG"), authorFor(rom));
+		} finally {
+			repo.close();
+		}
+
+		getSettings().setTuneRepository(rom.getFullFileName(), repoDir);
+		getSettings().setLastRepositoryDir(repoDir.getParentFile() == null
+				? repoDir : repoDir.getParentFile());
+		SettingsManager.save(getSettings());
+
+		showMessageDialog(parent,
+				MessageFormat.format(rb.getString("VCINITDONE"), repoDir.getAbsolutePath()),
+				rb.getString("VERSIONCTRL"), INFORMATION_MESSAGE);
+	}
+
+	/** Snapshot the current tune and create a new commit with a user message. */
+	private void commitTune() throws Exception {
+		final ECUEditor parent = ECUEditorManager.getECUEditor();
+		final Rom rom = parent.getLastSelectedRom();
+		if (rom == null) {
+			return;
+		}
+
+		final File repoDir = requireRepository(rom);
+		if (repoDir == null) {
+			return;
+		}
+
+		final String message = (String) javax.swing.JOptionPane.showInputDialog(parent,
+				rb.getString("VCCOMMITPROMPT"), rb.getString("VCCOMMIT"),
+				javax.swing.JOptionPane.PLAIN_MESSAGE, null, null, "");
+		if (message == null) {
+			return; // cancelled
+		}
+
+		final TuneRepository repo = TuneRepository.initOrOpen(repoDir);
+		try {
+			if (repo.commit(rom, message, authorFor(rom)) == null) {
+				showMessageDialog(parent, rb.getString("VCNOCHANGES"),
+						rb.getString("VERSIONCTRL"), INFORMATION_MESSAGE);
+			}
+		} finally {
+			repo.close();
+		}
+	}
+
+	/** Open the history dialog for the current tune's repository. */
+	private void showTuneHistory() throws Exception {
+		final ECUEditor parent = ECUEditorManager.getECUEditor();
+		final Rom rom = parent.getLastSelectedRom();
+		if (rom == null) {
+			return;
+		}
+
+		final File repoDir = requireRepository(rom);
+		if (repoDir == null) {
+			return;
+		}
+
+		final TuneRepository repo = TuneRepository.initOrOpen(repoDir);
+		try {
+			final TuneHistoryDialog dialog = new TuneHistoryDialog(parent, repo, rom, parent);
+			dialog.setVisible(true);
+		} finally {
+			repo.close();
+		}
+	}
+
+	/**
+	 * Resolve the repository for a tune, offering to initialize one if none is
+	 * registered yet. Returns {@code null} if the user declines or cancels.
+	 */
+	private File requireRepository(Rom rom) throws Exception {
+		final ECUEditor parent = ECUEditorManager.getECUEditor();
+		File repoDir = getSettings().getTuneRepository(rom.getFullFileName());
+		if (repoDir != null && TuneRepository.exists(repoDir)) {
+			return repoDir;
+		}
+
+		final int option = showConfirmDialog(parent, rb.getString("VCNOREPO"),
+				rb.getString("VERSIONCTRL"), javax.swing.JOptionPane.YES_NO_OPTION);
+		if (option == javax.swing.JOptionPane.YES_OPTION) {
+			initTuneRepository();
+			repoDir = getSettings().getTuneRepository(rom.getFullFileName());
+			if (repoDir != null && TuneRepository.exists(repoDir)) {
+				return repoDir;
+			}
+		}
+		return null;
+	}
+
+	private static String authorFor(Rom rom) {
+		final String author = rom.getRomID() == null ? null : rom.getRomID().getAuthor();
+		return (author == null || author.trim().length() == 0)
+				? System.getProperty("user.name", "RomRaider") : author;
 	}
 
 	private void increaseRomSize() throws Exception {

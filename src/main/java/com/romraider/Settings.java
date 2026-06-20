@@ -30,6 +30,7 @@ import java.awt.Font;
 import java.awt.Point;
 import java.io.File;
 import java.io.Serializable;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Vector;
@@ -76,6 +77,11 @@ public class Settings implements Serializable {
     /* XML Settings */
     public static final String REPOSITORY_ELEMENT_NAME = "repository-dir";
     public static final String REPOSITORY_ATTRIBUTE_NAME = "path";
+
+    /* Tune version control: maps an open tune's file path to its git repo dir */
+    public static final String TUNE_REPO_ELEMENT_NAME = "tune-repository";
+    public static final String TUNE_REPO_TUNE_ATTRIBUTE_NAME = "tune";
+    public static final String TUNE_REPO_DIR_ATTRIBUTE_NAME = "repo";
 
     public static final String ICONS_ELEMENT_NAME = "icons";
     public static final String EDITOR_ICONS_ELEMENT_NAME = "editor-toolbar";
@@ -179,6 +185,7 @@ public class Settings implements Serializable {
     private File lastDefDir = new File("definitions");
     private File lastImageDir = new File("images");
     private File lastRepositoryDir = new File("repositories");
+    private Map<String, String> tuneRepositories = new HashMap<String, String>();
     private boolean obsoleteWarning = true;
     private boolean calcConflictWarning = true;
     private boolean debug;
@@ -339,6 +346,33 @@ public class Settings implements Serializable {
 
     public void setLastRepositoryDir(File lastRepositoryDir) {
         this.lastRepositoryDir = lastRepositoryDir;
+    }
+
+    /** @return the version-control repository directory associated with a tune
+     *  file, or {@code null} if none has been registered. */
+    public File getTuneRepository(File tuneFile) {
+        if (tuneFile == null) {
+            return null;
+        }
+        final String repo = tuneRepositories.get(tuneFile.getAbsolutePath());
+        return repo == null ? null : new File(repo);
+    }
+
+    /** Associate a tune file with its version-control repository directory. */
+    public void setTuneRepository(File tuneFile, File repoDir) {
+        if (tuneFile == null || repoDir == null) {
+            return;
+        }
+        tuneRepositories.put(tuneFile.getAbsolutePath(), repoDir.getAbsolutePath());
+    }
+
+    /** @return the full tune-path to repo-path map (used for persistence). */
+    public Map<String, String> getTuneRepositories() {
+        return tuneRepositories;
+    }
+
+    public void setTuneRepositories(Map<String, String> tuneRepositories) {
+        this.tuneRepositories = tuneRepositories;
     }
 
     public int getSplitPaneLocation() {

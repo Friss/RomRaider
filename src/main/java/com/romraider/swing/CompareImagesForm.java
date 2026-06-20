@@ -169,6 +169,19 @@ public class CompareImagesForm extends JFrame implements ActionListener {
         }
     }
 
+    /**
+     * Preselect the two images to compare and run the comparison immediately.
+     * Used to drive the form from the tune version-control history.
+     */
+    public void setComparison(Rom left, Rom right)
+    {
+        comboBoxImageLeft.setSelectedItem(left);
+        comboBoxImageRight.setSelectedItem(right);
+        if (left != null && right != null) {
+            compareTables(left, right);
+        }
+    }
+
     public void compareTables(Rom left, Rom right)
     {
         listModelChanges.clear();
