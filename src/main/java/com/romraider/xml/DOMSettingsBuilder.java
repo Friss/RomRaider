@@ -136,6 +136,14 @@ public final class DOMSettingsBuilder {
         repositoryDir.setAttribute(Settings.REPOSITORY_ATTRIBUTE_NAME, settings.getLastRepositoryDir().getAbsolutePath());
         files.appendChild(repositoryDir);
 
+        // tune version-control repositories (tune file -> git repo dir)
+        for (Map.Entry<String, String> entry : settings.getTuneRepositories().entrySet()) {
+            IIOMetadataNode tuneRepo = new IIOMetadataNode(Settings.TUNE_REPO_ELEMENT_NAME);
+            tuneRepo.setAttribute(Settings.TUNE_REPO_TUNE_ATTRIBUTE_NAME, entry.getKey());
+            tuneRepo.setAttribute(Settings.TUNE_REPO_DIR_ATTRIBUTE_NAME, entry.getValue());
+            files.appendChild(tuneRepo);
+        }
+
         // ecu definition files
         Vector<File> defFiles = settings.getEcuDefinitionFiles();
 
