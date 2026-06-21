@@ -705,6 +705,16 @@ public class ECUEditorMenuBar extends JMenuBar implements ActionListener {
 		}
 		repoDir = fc.getSelectedFile();
 
+		// Require an empty/new directory so initializing version control can
+		// never delete or absorb unrelated files the user already keeps there.
+		final String[] existing = repoDir.list();
+		if (existing != null && existing.length > 0) {
+			showMessageDialog(parent,
+					MessageFormat.format(rb.getString("VCNOTEMPTY"), repoDir.getAbsolutePath()),
+					rb.getString("VERSIONCTRL"), INFORMATION_MESSAGE);
+			return;
+		}
+
 		final TuneRepository repo = TuneRepository.initOrOpen(repoDir);
 		try {
 			repo.commit(rom, rb.getString("VCINITMSG"), authorFor(rom));

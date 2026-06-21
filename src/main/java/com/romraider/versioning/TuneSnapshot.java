@@ -116,7 +116,10 @@ public final class TuneSnapshot {
             appendField(sb, "year", id.getYear());
             appendField(sb, "author", id.getAuthor());
             appendField(sb, "version", id.getVersion());
-            appendField(sb, "editStamp", id.getEditStamp());
+            // NB: editStamp is intentionally omitted. Rom.saveFile() rewrites it
+            // on every save for checksum-fix tunes, so including it here would
+            // make the manifest churn each commit and defeat no-op detection.
+            // The stamp is preserved in tune.bin regardless.
             appendField(sb, "checksum", id.getChecksum());
             appendField(sb, "fileSize", Integer.toString(id.getFileSize()));
         }
